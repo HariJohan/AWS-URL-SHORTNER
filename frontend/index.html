@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Serverless URL Shortener</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            background: linear-gradient(to right, #e8f5e9, #c8e6c9);
+            color: #333;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #555;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            margin-bottom: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        input {
+            flex: 1;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #a5d6a7;
+            border-radius: 6px;
+        }
+
+        button {
+            padding: 12px 20px;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #388e3c;
+        }
+
+        .generate-btn {
+            width: 100%;
+            margin-top: 15px;
+        }
+
+        #short-url {
+            margin-top: 20px;
+        }
+
+        .result {
+            background: #f1f8e9;
+            padding: 15px;
+            border-radius: 8px;
+            word-break: break-all;
+        }
+
+        .result a {
+            color: #1565c0;
+        }
+
+        .message {
+            text-align: center;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+
+        .success {
+            color: green;
+        }
+
+        .error {
+            color: red;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #4caf50;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f5f5f5;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+
+        @media (max-width: 600px) {
+
+            .input-row {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
+
+        }
+    </style>
+
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1>🔗 Serverless URL Shortener</h1>
+
+        <p class="subtitle">
+            Create short links and track click counts
+        </p>
+
+
+        <!-- CREATE SHORT URL -->
+
+        <div class="card">
+
+            <h2>Create Short URL</h2>
+
+            <div class="input-row">
+
+                <input type="url" id="longUrl" placeholder="https://example.com/your-long-url" required>
+
+            </div>
+
+            <button class="generate-btn" onclick="generateShortURL()">
+                Generate Short Link
+            </button>
+
+            <div id="short-url"></div>
+
+        </div>
+
+
+        <!-- ANALYTICS -->
+
+        <div class="card">
+
+            <h2>Click Analytics</h2>
+
+            <p>
+                Enter the short code to view its click count.
+            </p>
+
+            <div class="input-row">
+
+                <input type="text" id="shortCode" placeholder="Example: abc123">
+
+                <button onclick="getAnalytics()">
+                    Get Analytics
+                </button>
+
+            </div>
+
+            <div id="analytics"></div>
+
+        </div>
+
+
+        <!-- ALL LINKS -->
+
+        <div class="card">
+
+            <h2>All Short Links</h2>
+
+            <button onclick="loadAllLinks()">
+                Refresh Links
+            </button>
+
+            <div id="links"></div>
+
+        </div>
+
+
+        <div id="message"></div>
+
+    </div>
+
+
+    <script>
+
+        /*
+         * IMPORTANT:
+         * Replace this with your API Gateway URL.
+         *
+         * Example:
+         *
+         * https://abc123.execute-api.ap-south-1.amazonaws.com
+         */
+
+        const API_BASE_URL =
+            "https://4htulcdu61.execute-api.ap-south-2.amazonaws.com";
+
+
+        function showMessage(message, type) {
+
+            const messageDiv =
+                document.getElementById("message");
+
+            messageDiv.textContent = message;
+
+            messageDiv.className =
+                "message " + type;
+
+            setTimeout(() => {
+
+                messageDiv.textContent = "";
+
+            }, 4000);
+        }
+
+
+        // ==========================================
+        // CREATE SHORT URL
+        // ==========================================
+
+        async function generateShortURL() {
+
+            const longUrl =
+                document.getElementById("longUrl").value.trim();
+
+
+            if (!longUrl) {
+
+                showMessage(
+                    "Please enter a URL.",
+                    "error"
+                );
+
+                return;
+            }
+
+
+            try {
+
+                const response = await fetch(
+                    `${API_BASE_URL}/links`,
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body: JSON.stringify({
+                            target_url: longUrl
+                        })
+                    }
+                );
+
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        "Failed to create short URL"
+                    );
+                }
+
+
+                const result =
+                    await response.json();
+
+
+                const shortUrl =
+                    `${API_BASE_URL}/${result.code}`;
+
+
+                document.getElementById(
+                    "short-url"
+                ).innerHTML = `
+
+                <div class="result">
+
+                    <strong>
+                        Short URL:
+                    </strong>
+
+                    <br><br>
+
+                    <a
+                        href="${shortUrl}"
+                        target="_blank"
+                    >
+                        ${shortUrl}
+                    </a>
+
+                    <br><br>
+
+                    <button
+                        onclick="copyToClipboard('${shortUrl}')"
+                    >
+                        Copy URL
+                    </button>
+
+                </div>
+
+            `;
+
+
+                showMessage(
+                    "Short URL created successfully!",
+                    "success"
+                );
+
+
+                document.getElementById(
+                    "longUrl"
+                ).value = "";
+
+
+            } catch (error) {
+
+                console.error(error);
+
+                showMessage(
+                    "Error: " + error.message,
+                    "error"
+                );
+
+            }
+
+        }
+
+
+        // ==========================================
+        // GET ANALYTICS
+        // ==========================================
+
+        async function getAnalytics() {
+
+            let shortCode =
+                document.getElementById(
+                    "shortCode"
+                ).value.trim();
+
+
+            if (!shortCode) {
+
+                showMessage(
+                    "Please enter a short code.",
+                    "error"
+                );
+
+                return;
+            }
+
+
+            /*
+             * Allow user to paste either:
+             *
+             * abc123
+             *
+             * OR
+             *
+             * https://api-url/abc123
+             */
+
+            if (shortCode.includes("/")) {
+
+                shortCode =
+                    shortCode.split("/").pop();
+
+            }
+
+
+            try {
+
+                const response = await fetch(
+                    `${API_BASE_URL}/admin/links`
+                );
+
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        "Failed to fetch links"
+                    );
+
+                }
+
+
+                const data =
+                    await response.json();
+
+
+                const links =
+                    data.links || [];
+
+
+                const link =
+                    links.find(
+                        item =>
+                            item.code === shortCode
+                    );
+
+
+                const analyticsDiv =
+                    document.getElementById(
+                        "analytics"
+                    );
+
+
+                if (!link) {
+
+                    analyticsDiv.innerHTML = `
+
+                    <div class="result">
+
+                        No short URL found
+                        for code:
+
+                        <strong>
+                            ${shortCode}
+                        </strong>
+
+                    </div>
+
+                `;
+
+                    return;
+                }
+
+
+                const shortUrl =
+                    `${API_BASE_URL}/${link.code}`;
+
+
+                analyticsDiv.innerHTML = `
+
+                <div class="result">
+
+                    <p>
+                        <strong>Short Code:</strong>
+                        ${link.code}
+                    </p>
+
+                    <p>
+                        <strong>Original URL:</strong>
+                        <a
+                            href="${link.target_url}"
+                            target="_blank"
+                        >
+                            ${link.target_url}
+                        </a>
+                    </p>
+
+                    <p>
+                        <strong>Created At:</strong>
+                        ${link.created_at}
+                    </p>
+
+                    <p>
+                        <strong>Total Clicks:</strong>
+                        ${link.click_count || 0}
+                    </p>
+
+                    <p>
+                        <strong>Short URL:</strong>
+                        <a
+                            href="${shortUrl}"
+                            target="_blank"
+                        >
+                            ${shortUrl}
+                        </a>
+                    </p>
+
+                </div>
+
+            `;
+
+
+                showMessage(
+                    "Analytics loaded successfully!",
+                    "success"
+                );
+
+
+            } catch (error) {
+
+                console.error(error);
+
+                showMessage(
+                    "Error: " + error.message,
+                    "error"
+                );
+
+            }
+
+        }
+
+
+        // ==========================================
+        // LOAD ALL LINKS
+        // ==========================================
+
+        async function loadAllLinks() {
+
+            const linksDiv =
+                document.getElementById("links");
+
+
+            linksDiv.innerHTML =
+                `<div class="loading">
+                Loading...
+             </div>`;
+
+
+            try {
+
+                const response = await fetch(
+                    `${API_BASE_URL}/admin/links`
+                );
+
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        "Failed to load links"
+                    );
+
+                }
+
+
+                const data =
+                    await response.json();
+
+
+                const links =
+                    data.links || [];
+
+
+                if (links.length === 0) {
+
+                    linksDiv.innerHTML =
+                        "<p>No links created yet.</p>";
+
+                    return;
+                }
+
+
+                let tableHTML = `
+
+                <table>
+
+                    <tr>
+
+                        <th>
+                            Short Code
+                        </th>
+
+                        <th>
+                            Target URL
+                        </th>
+
+                        <th>
+                            Clicks
+                        </th>
+
+                        <th>
+                            Created At
+                        </th>
+
+                    </tr>
+
+            `;
+
+
+                links.forEach(link => {
+
+                    const shortUrl =
+                        `${API_BASE_URL}/${link.code}`;
+
+
+                    tableHTML += `
+
+                    <tr>
+
+                        <td>
+                            <a
+                                href="${shortUrl}"
+                                target="_blank"
+                            >
+                                ${link.code}
+                            </a>
+                        </td>
+
+                        <td>
+                            ${link.target_url}
+                        </td>
+
+                        <td>
+                            ${link.click_count || 0}
+                        </td>
+
+                        <td>
+                            ${link.created_at}
+                        </td>
+
+                    </tr>
+
+                `;
+
+                });
+
+
+                tableHTML += "</table>";
+
+
+                linksDiv.innerHTML =
+                    tableHTML;
+
+
+            } catch (error) {
+
+                console.error(error);
+
+                linksDiv.innerHTML =
+                    `<p class="error">
+                    ${error.message}
+                 </p>`;
+
+            }
+
+        }
+
+
+        // ==========================================
+        // COPY SHORT URL
+        // ==========================================
+
+        async function copyToClipboard(text) {
+
+            try {
+
+                await navigator.clipboard.writeText(text);
+
+                showMessage(
+                    "Short URL copied!",
+                    "success"
+                );
+
+            } catch (error) {
+
+                console.error(error);
+
+                showMessage(
+                    "Could not copy URL.",
+                    "error"
+                );
+
+            }
+
+        }
+
+    </script>
+
+</body>
+
+</html>
